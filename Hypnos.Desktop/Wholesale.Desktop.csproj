@@ -90,6 +90,7 @@
     <Compile Include="Forms\ExceptionForm.Designer.cs">
       <DependentUpon>ExceptionForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="Forms\Mode.cs" />
     <Compile Include="Forms\ParentForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -134,6 +135,9 @@
     <Compile Include="Utils\AuthenticationUtility.cs" />
     <Compile Include="Utils\CheckedListBoxUtility.cs" />
     <Compile Include="Utils\ExceptionsUtility.cs" />
+    <Compile Include="Utils\Forms\Configurations\EntityCreationConfiguration.cs" />
+    <Compile Include="Utils\Forms\Configurations\FillDetails.cs" />
+    <Compile Include="Utils\Forms\EntityCreationUtility.cs" />
     <Compile Include="Utils\GridUtility.cs" />
     <Compile Include="Utils\HashUtility.cs" />
     <Compile Include="Utils\JsonUtility.cs" />

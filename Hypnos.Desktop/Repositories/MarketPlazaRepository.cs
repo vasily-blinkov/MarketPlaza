@@ -1,10 +1,10 @@
-﻿using Wholesale.Desktop.Models.MarketPlaza.Lessees;
+﻿using System;
 using System.ComponentModel;
+using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
 using Wholesale.Desktop.Converters;
-using Wholesale.Desktop.Models.Administration;
-using Wholesale.Desktop.Models.Administration.User;
+using Wholesale.Desktop.Models.MarketPlaza.Lessees;
 
 namespace Wholesale.Desktop.Repositories
 {
@@ -26,14 +26,22 @@ namespace Wholesale.Desktop.Repositories
             new SqlParameter { ParameterName = "@id", Value = id }
         ).Single();
 
-        public int AddLessee(string json) => ExecuteCommandAuth(
-            "AddLessee",
-            new SqlParameter("@json", json)
-        );
+        /// <returns>ID of the created entity.</returns>
+        public short? AddLessee(string json)
+        {
+            var id = new SqlParameter { ParameterName = "@id", Direction = ParameterDirection.Output, SqlDbType = SqlDbType.SmallInt };
+            ExecuteCommandAuth("AddLessee", new SqlParameter("@json", json), id);
+            return (short?)(id.Value != DBNull.Value ? id.Value : null);
+        }
 
-        public int EditLessee(string json) => ExecuteCommandAuth(
-            "EditLessee",
-            new SqlParameter("@json", json)
+        public short? EditLessee(string json)
+        {
+            var id = new SqlParameter { ParameterName = "@id", Direction = ParameterDirection.Output, SqlDbType = SqlDbType.SmallInt };
+            ExecuteCommandAuth("EditLessee", new SqlParameter("@json", json), id);
+            return (short?)(id.Value != DBNull.Value ? id.Value : null);
+        }
+
+        public int DeleteLessee(short id) => ExecuteCommandAuth("DeleteLessee", new SqlParameter("@id", id)
         );
     }
 }

@@ -41,7 +41,7 @@
             this.transposeButton = new System.Windows.Forms.ToolStripButton();
             this.viewLabel = new System.Windows.Forms.ToolStripLabel();
             this.splitContainer = new System.Windows.Forms.SplitContainer();
-            this.lesseesGrid = new System.Windows.Forms.DataGridView();
+            this.masterGrid = new System.Windows.Forms.DataGridView();
             this.label5 = new System.Windows.Forms.Label();
             this.адрес = new System.Windows.Forms.TextBox();
             this.label4 = new System.Windows.Forms.Label();
@@ -57,7 +57,7 @@
             this.splitContainer.Panel1.SuspendLayout();
             this.splitContainer.Panel2.SuspendLayout();
             this.splitContainer.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.lesseesGrid)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.masterGrid)).BeginInit();
             this.SuspendLayout();
             // 
             // toolStrip
@@ -140,7 +140,7 @@
             this.deleteButton.Name = "deleteButton";
             this.deleteButton.Size = new System.Drawing.Size(55, 22);
             this.deleteButton.Text = "&Удалить";
-            this.deleteButton.Click += new System.EventHandler(this.DeleteUser);
+            this.deleteButton.Click += new System.EventHandler(this.DeleteEntity);
             // 
             // transposeButton
             // 
@@ -169,7 +169,7 @@
             // 
             // splitContainer.Panel1
             // 
-            this.splitContainer.Panel1.Controls.Add(this.lesseesGrid);
+            this.splitContainer.Panel1.Controls.Add(this.masterGrid);
             // 
             // splitContainer.Panel2
             // 
@@ -189,21 +189,21 @@
             // 
             // lesseesGrid
             // 
-            this.lesseesGrid.AllowUserToAddRows = false;
-            this.lesseesGrid.AllowUserToDeleteRows = false;
-            this.lesseesGrid.AllowUserToResizeRows = false;
-            this.lesseesGrid.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            this.lesseesGrid.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.lesseesGrid.Location = new System.Drawing.Point(0, 0);
-            this.lesseesGrid.MultiSelect = false;
-            this.lesseesGrid.Name = "lesseesGrid";
-            this.lesseesGrid.ReadOnly = true;
-            this.lesseesGrid.RowHeadersVisible = false;
-            this.lesseesGrid.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
-            this.lesseesGrid.Size = new System.Drawing.Size(176, 234);
-            this.lesseesGrid.TabIndex = 0;
-            this.lesseesGrid.CellEnter += new System.Windows.Forms.DataGridViewCellEventHandler(this.LoadUser);
-            this.lesseesGrid.SelectionChanged += new System.EventHandler(this.SelectUser);
+            this.masterGrid.AllowUserToAddRows = false;
+            this.masterGrid.AllowUserToDeleteRows = false;
+            this.masterGrid.AllowUserToResizeRows = false;
+            this.masterGrid.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            this.masterGrid.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.masterGrid.Location = new System.Drawing.Point(0, 0);
+            this.masterGrid.MultiSelect = false;
+            this.masterGrid.Name = "lesseesGrid";
+            this.masterGrid.ReadOnly = true;
+            this.masterGrid.RowHeadersVisible = false;
+            this.masterGrid.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
+            this.masterGrid.Size = new System.Drawing.Size(176, 234);
+            this.masterGrid.TabIndex = 0;
+            this.masterGrid.CellEnter += new System.Windows.Forms.DataGridViewCellEventHandler(this.LoadUser);
+            this.masterGrid.SelectionChanged += new System.EventHandler(this.SelectEntity);
             // 
             // label5
             // 
@@ -318,7 +318,7 @@
             this.splitContainer.Panel2.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.splitContainer)).EndInit();
             this.splitContainer.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)(this.lesseesGrid)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.masterGrid)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -329,7 +329,7 @@
         private System.Windows.Forms.ToolStrip toolStrip;
         private System.Windows.Forms.ToolStripButton transposeButton;
         private System.Windows.Forms.SplitContainer splitContainer;
-        private System.Windows.Forms.DataGridView lesseesGrid;
+        private System.Windows.Forms.DataGridView masterGrid;
         private System.Windows.Forms.ToolStripLabel crudLabel;
         private System.Windows.Forms.ToolStripLabel viewLabel;
         private System.Windows.Forms.ToolStripButton createButton;

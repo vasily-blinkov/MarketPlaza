@@ -233,213 +233,6 @@ BEGIN
 END
 GO
 
--- Wholesale.MarketPlaza.
-IF SCHEMA_ID('MarketPlaza') IS NULL
-BEGIN
-	PRINT N'Creating schema ''MarketPlaza''.';
-	EXEC (N'CREATE SCHEMA MarketPlaza');
-END
-GO
-
--- Wholesale.MarketPlaza.Товары.
-IF OBJECT_ID('MarketPlaza.Товары') IS NULL
-BEGIN
-	PRINT N'Creating table ''Товары''.'
-	CREATE TABLE MarketPlaza.Товары (
-		ТоварID smallint IDENTITY(-32768, 1) PRIMARY KEY NOT NULL,
-		Название nvarchar(100) NOT NULL UNIQUE,
-		Цена numeric(11, 3) NOT NULL,
-		IsDeleted bit DEFAULT 0 NOT NULL
-	);
-END
-GO
-
--- Wholesale.MarketPlaza.Арендаторы.
-IF OBJECT_ID('MarketPlaza.Арендаторы') IS NULL
-BEGIN
-	PRINT N'Creating table ''Арендаторы''.'
-	CREATE TABLE MarketPlaza.Арендаторы (
-		АрендаторID smallint IDENTITY(-32768, 1) PRIMARY KEY NOT NULL,
-		Фамилия nvarchar(100) NOT NULL,
-		Имя nvarchar(100) NOT NULL,
-		Отчество nvarchar(100) NOT NULL,
-		Телефон nvarchar(22) NOT NULL,
-		Адрес nvarchar(1000) NOT NULL,
-		IsDeleted bit DEFAULT 0 NOT NULL
-	);
-END
-GO
-
--- Заполнение арендаторов.
-IF NOT EXISTS(SELECT * FROM MarketPlaza.Арендаторы u WHERE u.АрендаторID = -32768)
-BEGIN
-	PRINT 'Fill table ''Арендаторы''.';
-	INSERT INTO MarketPlaza.Арендаторы(Фамилия, Имя, Отчество, Телефон, Адрес) VALUES
-		(N'Иванов', N'Иван', N'Иванович', N'+7 (555) 111-11-11', N'Москва, Ленинградское шоссе, дом 3, строение 3'),
-		(N'Петров', N'Пётр', N'Петрович', N'+7 (555) 222-22-22', N'Рязань, Вокзальная улица, дом 6, помещение 6'),
-		(N'Олегов', N'Олег', N'Олегович', N'+7 (555) 333-33-33', N'Барнаул, Ленина улица, дом 9, квартира 9');
-END
-GO
-
--- Procedure: Wholesale.MarketPlaza.GetLessees
-PRINT N'Creating or altering procedure ''GetLessees''';
-CREATE OR ALTER PROCEDURE MarketPlaza.GetLessees
-	@query nvarchar(150) = NULL,
-	@token nvarchar(128)
-AS BEGIN
-	EXEC Auth.ValidateToken @token = @token;
-	SELECT u.АрендаторID, u.Фамилия + N' ' + u.Имя + N' ' + u.Отчество FullName 
-		FROM MarketPlaza.Арендаторы u
-		WHERE @query IS NULL
-		OR LOWER(u.Фамилия) LIKE N'%' + LOWER(@query) + '%'
-		OR LOWER(u.Имя) LIKE N'%' + LOWER(@query) + '%'
-		OR LOWER(u.Отчество) LIKE N'%' + LOWER(@query) + '%'
-		OR LOWER(u.Телефон) LIKE N'%' + LOWER(@query) + '%'
-		OR LOWER(u.Адрес) LIKE N'%' + LOWER(@query) + '%';
-END
-GO
-
--- Procedure: Wholesale.MarketPlaza.GetSignleLessee
-PRINT N'Creating or altering procedure ''GetSignleLessee''';
-CREATE OR ALTER PROCEDURE MarketPlaza.GetSignleLessee
-	@id smallint,
-	@token nvarchar(128)
-AS BEGIN
-	EXEC Auth.ValidateToken @token = @token;
-	SELECT TOP(1)
-		u.АрендаторID, u.Фамилия, u.Имя, u.Отчество, u.Телефон, u.Адрес 
-		FROM MarketPlaza.Арендаторы u
-		WHERE u.АрендаторID = @id AND u.IsDeleted = 0;
-END
-GO
-
--- Procedure: Wholesale.MarketPlaza.AddLessee
-PRINT N'Creating or altering procedure ''AddLessee''';
-CREATE OR ALTER PROCEDURE MarketPlaza.AddLessee
-	@json nvarchar(max),
-	@token nvarchar(128)
-AS BEGIN
-	EXEC Auth.ValidateToken @token = @token;
-	-- Parse input JSON.
-	DECLARE @new_entity TABLE(Фамилия nvarchar(100), Имя nvarchar(100), Отчество nvarchar(100), Телефон nvarchar(22), Адрес nvarchar(1000));
-	INSERT @new_entity (Фамилия, Имя, Отчество, Телефон, Адрес)
-		SELECT j.Фамилия, j.Имя, j.Отчество, j.Телефон, j.Адрес
-		FROM OpenJson(@json)
-		WITH (Фамилия nvarchar(100), Имя nvarchar(100), Отчество nvarchar(100), Телефон nvarchar(22), Адрес nvarchar(1000)) AS j;
-	-- Validating inserting entity.
-	IF EXISTS (SELECT 1 FROM @new_entity u WHERE
-		ISNULL(u.Фамилия, N'') = N'' OR ISNULL(u.Имя, N'') = N'' OR ISNULL(u.Отчество, N'') = N'' OR ISNULL(u.Телефон, N'') = N'' OR ISNULL(u.Адрес, N'') = N'')
-		THROW 54000, N'Не указано значение одного из обязательных для создания нового арендателя полей, таких как: фамилия, имя, отчество, телефон, адрес', 1;
-	-- Current user ID.
-	DECLARE @user_id smallint;
-	SELECT @user_id = s.UserID FROM Auth.[Session] s WHERE s.Token = @token;
-	-- Inserting an entity.
-	DECLARE @inserted_entity TABLE(ID smallint);
-	BEGIN TRY
-		BEGIN TRANSACTION
-			INSERT MarketPlaza.Арендаторы (Фамилия, Имя, Отчество, Телефон, Адрес)
-				OUTPUT INSERTED.АрендаторID INTO @inserted_entity
-				SELECT j.Фамилия, j.Имя, j.Отчество, j.Телефон, j.Адрес
-				FROM @new_entity j;
-		COMMIT;
-	END TRY
-	BEGIN CATCH
-		IF @@TRANCOUNT > 0
-		BEGIN
-			ROLLBACK;
-			THROW 54001, N'Произошло исключение при сохранении информации об арендаторе', 1;
-		END
-	END CATCH
-END
-GO
-
--- Procedure: Wholesale.MarketPlaza.EditLessee
-PRINT N'Creating or altering procedure ''EditLessee''';
-CREATE OR ALTER PROCEDURE MarketPlaza.EditLessee
-	@json nvarchar(max),
-	@token nvarchar(128)
-AS BEGIN
-	EXEC Auth.ValidateToken @token = @token;
-	-- Parsing input JSON.
-	DECLARE @changes TABLE(АрендаторID smallint, Фамилия nvarchar(100), Имя nvarchar(100), Отчество nvarchar(100), Телефон nvarchar(22), Адрес nvarchar(1000));
-	INSERT @changes(АрендаторID, Фамилия, Имя, Отчество, Телефон, Адрес)
-		SELECT j.АрендаторID, j.Фамилия, j.Имя, j.Отчество, j.Телефон, j.Адрес FROM OpenJson(@json)
-		WITH (АрендаторID smallint, Фамилия nvarchar(100), Имя nvarchar(100), Отчество nvarchar(100), Телефон nvarchar(22), Адрес nvarchar(1000)) AS j;
-	-- ID of the entity to edit.
-	DECLARE @id smallint;
-	SELECT @id = u.АрендаторID FROM @changes u;
-	-- Validate input data.
-	IF NOT EXISTS (SELECT 1 FROM MarketPlaza.Арендаторы u WHERE u.АрендаторID = @id)
-	BEGIN
-		DECLARE @error nvarchar(100) = N'Редактирование не выполнено, так как арендатор с ID = "'
-			+ IIF(@id IS NULL, N'(не указан)', CONVERT(nvarchar(6), @id))
-			+ N'" не существует';
-		THROW 55000, @error, 1;
-	END
-	BEGIN TRY
-		BEGIN TRANSACTION
-			-- Updating the entity.
-			UPDATE MarketPlaza.Арендаторы SET
-				Фамилия = IIF(TRIM(ISNULL(json.Фамилия, N'')) = N'', MarketPlaza.Арендаторы.Фамилия , json.Фамилия),
-				Имя = IIF(TRIM(ISNULL(json.Имя, N'')) = N'', MarketPlaza.Арендаторы.Имя , json.Имя),
-				Отчество = IIF(TRIM(ISNULL(json.Отчество, N'')) = N'', MarketPlaza.Арендаторы.Отчество , json.Отчество),
-				Адрес = IIF(TRIM(ISNULL(json.Адрес, N'')) = N'', MarketPlaza.Арендаторы.Адрес , json.Адрес),
-				Телефон = IIF(TRIM(ISNULL(json.Телефон, N'')) = N'', MarketPlaza.Арендаторы.Телефон , json.Телефон)
-			FROM @changes AS json WHERE MarketPlaza.Арендаторы.АрендаторID = @id;
-		COMMIT
-	END TRY
-	BEGIN CATCH
-		IF @@TRANCOUNT > 0
-		BEGIN
-			ROLLBACK;
-			THROW 55001, N'Редактирование арендатора не выполнено', 1;
-		END
-	END CATCH
-END
-GO
-
--- Wholesale.MarketPlaza.Места.
-IF OBJECT_ID('MarketPlaza.Места') IS NULL
-BEGIN
-	PRINT N'Creating table ''Места''.'
-	CREATE TABLE MarketPlaza.Места (
-		МестоID smallint IDENTITY(-32768, 1) PRIMARY KEY NOT NULL,
-		Размер numeric(6, 1) NOT NULL,
-		Класс nvarchar(20) NOT NULL,
-		Цена numeric(11, 3) NOT NULL,
-		Адрес nvarchar(1000) NOT NULL,
-		Номер nvarchar(20) NOT NULL,
-		IsDeleted bit DEFAULT 0 NOT NULL
-	);
-END
-GO
-
--- Wholesale.MarketPlaza.ЗанятиеМест.
-IF OBJECT_ID('MarketPlaza.ЗанятиеМест') IS NULL
-BEGIN
-	PRINT N'Creating table ''ЗанятиеМест''.'
-	CREATE TABLE MarketPlaza.ЗанятиеМест (
-		ДатаНачала datetime2 NOT NULL,
-		ДатаОкончания datetime2 NOT NULL,
-		МестоID smallint FOREIGN KEY REFERENCES MarketPlaza.Места(МестоID) NOT NULL,
-		АрендаторID smallint FOREIGN KEY REFERENCES MarketPlaza.Арендаторы(АрендаторID) NOT NULL,
-		PRIMARY KEY (МестоID, АрендаторID)
-	);
-END
-GO
-
--- Wholesale.MarketPlaza.ТоварАрендатор.
-IF OBJECT_ID('MarketPlaza.ТоварАрендатор') IS NULL
-BEGIN
-	PRINT N'Creating table ''ТоварАрендатор''.'
-	CREATE TABLE MarketPlaza.ТоварАрендатор (
-		ТоварID smallint FOREIGN KEY REFERENCES MarketPlaza.Арендаторы(АрендаторID) NOT NULL,
-		АрендаторID smallint FOREIGN KEY REFERENCES MarketPlaza.Товары(ТоварID) NOT NULL,
-		PRIMARY KEY (ТоварID, АрендаторID)
-	);
-END
-GO
-
 -- Function: Wholesale.Auth.DoesLoginExist.
 PRINT N'Creating or altering function ''DoesLoginExist''';
 CREATE OR ALTER FUNCTION Auth.DoesLoginExist(@login_name nvarchar(150)) RETURNS bit
@@ -510,6 +303,245 @@ AS BEGIN
 		DELETE FROM Auth.[Session] WHERE Token = @token;
 		THROW 51000, N'Ваша сессия истекла, пройдите повторную аутентификацию', 1;
 	END
+END
+GO
+
+-- Wholesale.MarketPlaza.
+IF SCHEMA_ID('MarketPlaza') IS NULL
+BEGIN
+	PRINT N'Creating schema ''MarketPlaza''.';
+	EXEC (N'CREATE SCHEMA MarketPlaza');
+END
+GO
+
+-- Wholesale.MarketPlaza.Товары.
+IF OBJECT_ID('MarketPlaza.Товары') IS NULL
+BEGIN
+	PRINT N'Creating table ''Товары''.'
+	CREATE TABLE MarketPlaza.Товары (
+		ТоварID smallint IDENTITY(-32768, 1) PRIMARY KEY NOT NULL,
+		Название nvarchar(100) NOT NULL UNIQUE,
+		Цена numeric(11, 3) NOT NULL,
+		IsDeleted bit DEFAULT 0 NOT NULL
+	);
+END
+GO
+
+-- Wholesale.MarketPlaza.Арендаторы.
+IF OBJECT_ID('MarketPlaza.Арендаторы') IS NULL
+BEGIN
+	PRINT N'Creating table ''Арендаторы''.'
+	CREATE TABLE MarketPlaza.Арендаторы (
+		АрендаторID smallint IDENTITY(-32768, 1) PRIMARY KEY NOT NULL,
+		Фамилия nvarchar(100) NOT NULL,
+		Имя nvarchar(100) NOT NULL,
+		Отчество nvarchar(100) NOT NULL,
+		Телефон nvarchar(22) NOT NULL,
+		Адрес nvarchar(1000) NOT NULL,
+		IsDeleted bit DEFAULT 0 NOT NULL
+	);
+END
+GO
+
+-- Заполнение арендаторов.
+IF NOT EXISTS(SELECT * FROM MarketPlaza.Арендаторы u WHERE u.АрендаторID = -32768)
+BEGIN
+	PRINT 'Fill table ''Арендаторы''.';
+	INSERT INTO MarketPlaza.Арендаторы(Фамилия, Имя, Отчество, Телефон, Адрес) VALUES
+		(N'Иванов', N'Иван', N'Иванович', N'+7 (555) 111-11-11', N'Москва, Ленинградское шоссе, дом 3, строение 3'),
+		(N'Петров', N'Пётр', N'Петрович', N'+7 (555) 222-22-22', N'Рязань, Вокзальная улица, дом 6, помещение 6'),
+		(N'Олегов', N'Олег', N'Олегович', N'+7 (555) 333-33-33', N'Барнаул, Ленина улица, дом 9, квартира 9');
+END
+GO
+
+-- Procedure: Wholesale.MarketPlaza.GetLessees
+PRINT N'Creating or altering procedure ''GetLessees''';
+CREATE OR ALTER PROCEDURE MarketPlaza.GetLessees
+	@query nvarchar(150) = NULL,
+	@token nvarchar(128)
+AS BEGIN
+	EXEC Auth.ValidateToken @token = @token;
+	SELECT u.АрендаторID, u.Фамилия + N' ' + u.Имя + N' ' + u.Отчество FullName 
+		FROM MarketPlaza.Арендаторы u
+		WHERE u.IsDeleted = 0 AND
+		(@query IS NULL
+		OR LOWER(u.Фамилия) LIKE N'%' + LOWER(@query) + '%'
+		OR LOWER(u.Имя) LIKE N'%' + LOWER(@query) + '%'
+		OR LOWER(u.Отчество) LIKE N'%' + LOWER(@query) + '%'
+		OR LOWER(u.Телефон) LIKE N'%' + LOWER(@query) + '%'
+		OR LOWER(u.Адрес) LIKE N'%' + LOWER(@query) + '%');
+END
+GO
+
+-- Procedure: Wholesale.MarketPlaza.GetSignleLessee
+PRINT N'Creating or altering procedure ''GetSignleLessee''';
+CREATE OR ALTER PROCEDURE MarketPlaza.GetSignleLessee
+	@id smallint,
+	@token nvarchar(128)
+AS BEGIN
+	EXEC Auth.ValidateToken @token = @token;
+	SELECT TOP(1)
+		u.АрендаторID, u.Фамилия, u.Имя, u.Отчество, u.Телефон, u.Адрес 
+		FROM MarketPlaza.Арендаторы u
+		WHERE u.АрендаторID = @id AND u.IsDeleted = 0;
+END
+GO
+
+-- Procedure: Wholesale.MarketPlaza.AddLessee
+PRINT N'Creating or altering procedure ''AddLessee''';
+CREATE OR ALTER PROCEDURE MarketPlaza.AddLessee
+	@json nvarchar(max),
+	@id smallint OUTPUT, -- ID of the created entity
+	@token nvarchar(128)
+AS BEGIN
+	EXEC Auth.ValidateToken @token = @token;
+	-- Parse input JSON.
+	DECLARE @new_entity TABLE(Фамилия nvarchar(100), Имя nvarchar(100), Отчество nvarchar(100), Телефон nvarchar(22), Адрес nvarchar(1000));
+	INSERT @new_entity (Фамилия, Имя, Отчество, Телефон, Адрес)
+		SELECT j.Фамилия, j.Имя, j.Отчество, j.Телефон, j.Адрес
+		FROM OpenJson(@json)
+		WITH (Фамилия nvarchar(100), Имя nvarchar(100), Отчество nvarchar(100), Телефон nvarchar(22), Адрес nvarchar(1000)) AS j;
+	-- Validating inserting entity.
+	IF EXISTS (SELECT 1 FROM @new_entity u WHERE
+		ISNULL(u.Фамилия, N'') = N'' OR ISNULL(u.Имя, N'') = N'' OR ISNULL(u.Отчество, N'') = N'' OR ISNULL(u.Телефон, N'') = N'' OR ISNULL(u.Адрес, N'') = N'')
+		THROW 54000, N'Не указано значение одного из обязательных для создания нового арендателя полей, таких как: фамилия, имя, отчество, телефон, адрес', 1;
+	-- Current user ID.
+	DECLARE @user_id smallint;
+	SELECT @user_id = s.UserID FROM Auth.[Session] s WHERE s.Token = @token;
+	-- Inserting an entity.
+	DECLARE @inserted_entity TABLE(ID smallint);
+	BEGIN TRY
+		BEGIN TRANSACTION
+			INSERT MarketPlaza.Арендаторы (Фамилия, Имя, Отчество, Телефон, Адрес)
+				OUTPUT INSERTED.АрендаторID INTO @inserted_entity
+				SELECT j.Фамилия, j.Имя, j.Отчество, j.Телефон, j.Адрес
+				FROM @new_entity j;
+			SELECT @id = e.ID FROM @inserted_entity e; 
+		COMMIT;
+	END TRY
+	BEGIN CATCH
+		IF @@TRANCOUNT > 0
+		BEGIN
+			ROLLBACK;
+			THROW 54001, N'Произошло исключение при сохранении информации об арендаторе', 1;
+		END
+	END CATCH
+END
+GO
+
+-- Procedure: Wholesale.MarketPlaza.EditLessee
+PRINT N'Creating or altering procedure ''EditLessee''';
+CREATE OR ALTER PROCEDURE MarketPlaza.EditLessee
+	@json nvarchar(max),
+	@id smallint OUTPUT,
+	@token nvarchar(128)
+AS BEGIN
+	EXEC Auth.ValidateToken @token = @token;
+	-- Parsing input JSON.
+	DECLARE @changes TABLE(АрендаторID smallint, Фамилия nvarchar(100), Имя nvarchar(100), Отчество nvarchar(100), Телефон nvarchar(22), Адрес nvarchar(1000));
+	INSERT @changes(АрендаторID, Фамилия, Имя, Отчество, Телефон, Адрес)
+		SELECT j.АрендаторID, j.Фамилия, j.Имя, j.Отчество, j.Телефон, j.Адрес FROM OpenJson(@json)
+		WITH (АрендаторID smallint, Фамилия nvarchar(100), Имя nvarchar(100), Отчество nvarchar(100), Телефон nvarchar(22), Адрес nvarchar(1000)) AS j;
+	-- ID of the entity to edit.
+	SELECT @id = u.АрендаторID FROM @changes u;
+	-- Validate input data.
+	IF NOT EXISTS (SELECT 1 FROM MarketPlaza.Арендаторы u WHERE u.АрендаторID = @id)
+	BEGIN
+		DECLARE @error nvarchar(100) = N'Редактирование не выполнено, так как арендатор с ID = "'
+			+ IIF(@id IS NULL, N'(не указан)', CONVERT(nvarchar(6), @id))
+			+ N'" не существует';
+		THROW 55000, @error, 1;
+	END
+	BEGIN TRY
+		BEGIN TRANSACTION
+			-- Updating the entity.
+			UPDATE MarketPlaza.Арендаторы SET
+				Фамилия = IIF(TRIM(ISNULL(json.Фамилия, N'')) = N'', MarketPlaza.Арендаторы.Фамилия , json.Фамилия),
+				Имя = IIF(TRIM(ISNULL(json.Имя, N'')) = N'', MarketPlaza.Арендаторы.Имя , json.Имя),
+				Отчество = IIF(TRIM(ISNULL(json.Отчество, N'')) = N'', MarketPlaza.Арендаторы.Отчество , json.Отчество),
+				Адрес = IIF(TRIM(ISNULL(json.Адрес, N'')) = N'', MarketPlaza.Арендаторы.Адрес , json.Адрес),
+				Телефон = IIF(TRIM(ISNULL(json.Телефон, N'')) = N'', MarketPlaza.Арендаторы.Телефон , json.Телефон)
+			FROM @changes AS json WHERE MarketPlaza.Арендаторы.АрендаторID = @id;
+		COMMIT
+	END TRY
+	BEGIN CATCH
+		IF @@TRANCOUNT > 0
+		BEGIN
+			ROLLBACK;
+			THROW 55001, N'Редактирование арендатора не выполнено', 1; -- todo: для админов возвращать так же текст ошибки (все ROLLBACK)
+		END
+	END CATCH
+END
+GO
+
+-- Procedure: Wholesale.MarketPlaza.DeleteLessee
+PRINT N'Creating or altering procedure ''DeleteLessee''';
+CREATE OR ALTER PROCEDURE MarketPlaza.DeleteLessee
+	@id smallint,
+	@token nvarchar(128)
+AS BEGIN
+	EXEC Auth.ValidateToken @token = @token;
+	IF NOT EXISTS (SELECT 1 FROM MarketPlaza.Арендаторы а WHERE а.АрендаторID = @id)
+	BEGIN
+		DECLARE @error nvarchar(100) = N'Удаление не выполнено, так как арендатор с ID = "'
+			+ IIF(@id IS NULL, N'(не указан)', CONVERT(nvarchar(6), @id))
+			+ N'" не существует';
+		THROW 56000, @error, 1;
+	END
+	BEGIN TRY
+		BEGIN TRANSACTION
+			UPDATE MarketPlaza.Арендаторы SET IsDeleted = 1 WHERE АрендаторID = @id;
+		COMMIT
+	END TRY
+	BEGIN CATCH
+		IF @@TRANCOUNT > 0
+		BEGIN
+			ROLLBACK;
+			THROW 56001, N'Удаление арендатора не выполнено', 1; 
+		END
+	END CATCH
+END
+GO
+
+-- Wholesale.MarketPlaza.Места.
+IF OBJECT_ID('MarketPlaza.Места') IS NULL
+BEGIN
+	PRINT N'Creating table ''Места''.'
+	CREATE TABLE MarketPlaza.Места (
+		МестоID smallint IDENTITY(-32768, 1) PRIMARY KEY NOT NULL,
+		Размер numeric(6, 1) NOT NULL,
+		Класс nvarchar(20) NOT NULL,
+		Цена numeric(11, 3) NOT NULL,
+		Адрес nvarchar(1000) NOT NULL,
+		Номер nvarchar(20) NOT NULL,
+		IsDeleted bit DEFAULT 0 NOT NULL
+	);
+END
+GO
+
+-- Wholesale.MarketPlaza.ЗанятиеМест.
+IF OBJECT_ID('MarketPlaza.ЗанятиеМест') IS NULL
+BEGIN
+	PRINT N'Creating table ''ЗанятиеМест''.'
+	CREATE TABLE MarketPlaza.ЗанятиеМест (
+		ДатаНачала datetime2 NOT NULL,
+		ДатаОкончания datetime2 NOT NULL,
+		МестоID smallint FOREIGN KEY REFERENCES MarketPlaza.Места(МестоID) NOT NULL,
+		АрендаторID smallint FOREIGN KEY REFERENCES MarketPlaza.Арендаторы(АрендаторID) NOT NULL,
+		PRIMARY KEY (МестоID, АрендаторID)
+	);
+END
+GO
+
+-- Wholesale.MarketPlaza.ТоварАрендатор.
+IF OBJECT_ID('MarketPlaza.ТоварАрендатор') IS NULL
+BEGIN
+	PRINT N'Creating table ''ТоварАрендатор''.'
+	CREATE TABLE MarketPlaza.ТоварАрендатор (
+		ТоварID smallint FOREIGN KEY REFERENCES MarketPlaza.Арендаторы(АрендаторID) NOT NULL,
+		АрендаторID smallint FOREIGN KEY REFERENCES MarketPlaza.Товары(ТоварID) NOT NULL,
+		PRIMARY KEY (ТоварID, АрендаторID)
+	);
 END
 GO
 

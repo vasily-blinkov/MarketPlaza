@@ -1,4 +1,5 @@
 ﻿namespace Wholesale.Desktop.Repositories
 {
-    public delegate int Upsert(string json);
+    /// <returns>ID of the updated or the inserted database table record.</returns>
+    public delegate short? Upsert(string json);
 }

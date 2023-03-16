@@ -1,29 +1,29 @@
 ﻿using System;
 using System.ComponentModel;
 using System.Data.SqlClient;
-using System.Linq;
 using System.Windows.Forms;
 using Wholesale.Desktop.EqualityComparers;
-using Wholesale.Desktop.Models.Administration;
-using Wholesale.Desktop.Models.Administration.User;
 using Wholesale.Desktop.Models.MarketPlaza.Lessees;
 using Wholesale.Desktop.Repositories;
 using Wholesale.Desktop.Utils;
+using Wholesale.Desktop.Utils.Forms;
+using Wholesale.Desktop.Utils.Forms.Configurations;
 
 namespace Wholesale.Desktop.Forms
 {
     public partial class АрендаторForm : Form
     {
-        private enum Mode { Main, Create };
+        private readonly ToolStripModeUtility<Mode> modeUtility;
+
+        private readonly EntityCreationUtility<LesseeForGrid, LesseeForDetail> entityCreator;
 
         private short? entityID;
-
-        private readonly ToolStripModeUtility<Mode> modeUtility;
 
         public АрендаторForm()
         {
             InitializeComponent();
             modeUtility = InitializeModes();
+            entityCreator = InitializeCreator();
         }
 
         private ToolStripModeUtility<Mode> InitializeModes()
@@ -31,6 +31,15 @@ namespace Wholesale.Desktop.Forms
             return new ToolStripModeUtility<Mode>(toolStrip)
                 .Map(Mode.Main, filterLabel, filterBox, readButton, masterDetailsSeparator, crudLabel, createButton);
         }
+
+        private EntityCreationUtility<LesseeForGrid, LesseeForDetail> InitializeCreator() =>
+            new EntityCreationUtility<LesseeForGrid, LesseeForDetail>(
+                new EntityCreationConfiguration<LesseeForGrid, LesseeForDetail>
+                {
+                    MasterGrid = masterGrid,
+                    FillDetails = FillDetail,
+                    ModeUtility = modeUtility
+                });
 
         private void Transpose(object sender, EventArgs e)
         {
@@ -48,16 +57,26 @@ namespace Wholesale.Desktop.Forms
 
         private void FillGrid()
         {
+            var entityID = this.entityID;
+
             using (var repository = new MarketPlazaRepository())
             {
-                lesseesGrid.DataSource = repository.GetLessees(filterBox.Text);
-                GridUtility.Setup(lesseesGrid, ReflectionUtility.GetHiddenNames<LesseeForGrid>());
+                masterGrid.DataSource = repository.GetLessees(filterBox.Text);
+            }
+
+            GridUtility.Setup(masterGrid, ReflectionUtility.GetHiddenNames<LesseeForGrid>());
+
+            // Заливка гриды меняет выделение, так как данные удаляются; выбираем созданный/отредактированный экземпляр.
+            // TODO: Зарефакторить.
+            if (entityID.HasValue)
+            {
+                ChangeEntity(entityID.Value);
             }
         }
 
         private void LoadUser()
         {
-            var selectedRows = lesseesGrid.SelectedRows;
+            var selectedRows = masterGrid.SelectedRows;
 
             if (selectedRows.Count == 0)
             {
@@ -69,6 +88,12 @@ namespace Wholesale.Desktop.Forms
 
         private void LoadUser(object sender, DataGridViewCellEventArgs e)
         {
+            if (modeUtility.Mode == Mode.Create)
+            {
+                // потому что надо сначала получить подтверждение, после чего (при утвердительном ответе) вручную перечитается экземпляр
+                return;
+            }
+
             LoadEntity(e.RowIndex);
         }
 
@@ -119,7 +144,7 @@ namespace Wholesale.Desktop.Forms
                 return null; // nothing selected
             }
 
-            var idValue = lesseesGrid.Rows[rowIndex].Cells[nameof(LesseeForGrid.АрендаторID)].Value;
+            var idValue = masterGrid.Rows[rowIndex].Cells[nameof(LesseeForGrid.АрендаторID)].Value;
 
             return short.TryParse(idValue != null ? idValue.ToString() : string.Empty, out var userID)
                 ? userID
@@ -162,7 +187,7 @@ namespace Wholesale.Desktop.Forms
 
         private void SelectRow(short userID)
         {
-            var row = lesseesGrid.Rows.Find(nameof(LesseeForGrid.АрендаторID), userID, new IdEqualityComparer());
+            var row = masterGrid.Rows.Find(nameof(LesseeForGrid.АрендаторID), userID, new IdEqualityComparer());
 
             if (row == null)
             {
@@ -176,68 +201,89 @@ namespace Wholesale.Desktop.Forms
         {
         }
 
-        private void CreateEntity(object sender, EventArgs e)
+        private void CreateEntity(object sender, EventArgs e) => entityCreator.PrepareNewEntity();
+
+        private void DeleteEntity()
         {
-            // Add a new row to the table.
-            ((BindingList<LesseeForGrid>)lesseesGrid.DataSource).Add(new LesseeForGrid());
+            if (!entityID.HasValue || ConfirmDeleteEntity() != DialogResult.Yes)
+            {
+                return;
+            }
 
-            // Select the created row.
-            lesseesGrid.ClearSelection();
-            lesseesGrid.Rows[lesseesGrid.RowCount - 1].Selected = true;
+            using (var repository = new MarketPlazaRepository())
+            {
+                repository.DeleteLessee(entityID.Value);
+            }
 
-            // Clear details.
-            FillDetail(new LesseeForDetail());
-
-            // Change visible tool strip items.
-            modeUtility.Switch(Mode.Create);
+            entityID = null;
+            Reload();
         }
 
         private void CancelCreateEntity()
         {
+            // Cancelling entity creation itself.
             modeUtility.Mode = Mode.Main;
-            ((BindingList<LesseeForGrid>)lesseesGrid.DataSource).RemoveAt(lesseesGrid.RowCount - 1);
+            ((BindingList<LesseeForGrid>)masterGrid.DataSource).RemoveAt(masterGrid.RowCount - 1);
         }
 
-        private void DeleteUser(object sender, EventArgs e)
+        private void DeleteUnsavedEntity()
         {
-            if (modeUtility.Mode == Mode.Create && ConfirmCancelCreateUser() == DialogResult.Yes)
-            {
-                CancelCreateEntity();
+            CancelCreateEntity();
 
-                // Select previously selected row.
-                if (this.entityID.HasValue)
-                {
-                    SelectRow(entityID.Value);
-                    LoadEntity(entityID.Value);
-                }
+            // Select previously selected row.
+            if (this.entityID.HasValue)
+            {
+                SelectRow(entityID.Value);
+                LoadEntity(entityID.Value);
             }
         }
 
-        private void SelectUser(object sender, EventArgs e)
+        private void DeleteEntity(object sender, EventArgs e)
         {
-            if (modeUtility.Mode == Mode.Create && !lesseesGrid.Rows[lesseesGrid.RowCount - 1].Selected)
+            switch (modeUtility.Mode)
             {
-                if (ConfirmCancelCreateUser() == DialogResult.Yes) 
+                case Mode.Main:
+                    DeleteEntity();
+                    break;
+                case Mode.Create when ConfirmCancelCreateEntity() == DialogResult.Yes:
+                    DeleteUnsavedEntity();
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        private void SelectEntity(object sender, EventArgs e)
+        {
+            if (modeUtility.Mode == Mode.Create && !masterGrid.Rows[masterGrid.RowCount - 1].Selected)
+            {
+                if (ConfirmCancelCreateEntity() == DialogResult.Yes) 
                 {
                     CancelCreateEntity();
-                    LoadEntity(lesseesGrid.SelectedRows[0].Index);
+                    LoadEntity(masterGrid.SelectedRows[0].Index);
                 }
                 else
                 {
-                    lesseesGrid.Rows[lesseesGrid.RowCount - 1].Selected = true;
+                    masterGrid.Rows[masterGrid.RowCount - 1].Selected = true;
                 }
             }
         }
 
-        private DialogResult ConfirmCancelCreateUser() => MessageBox.Show(
+        private DialogResult ConfirmCancelCreateEntity() => MessageBox.Show(
             "Форма содержит данные, которые пока не были сохранены в базу. При продолжении без сохранения они будут безвозвратно утеряны.",
-            "Отменить создание пользователя?",
+            "Отменить создание арендатора?",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question);
+
+        private DialogResult ConfirmDeleteEntity() => MessageBox.Show(
+            "Вы удаляете арендатора. Отменить действие будет невозможно. Уверены, что хотите продолжить?",
+            "Удалить арендатора?",
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Question);
 
         private void HandleClosing(object sender, FormClosingEventArgs e)
         {
-            if (modeUtility.Mode == Mode.Create && ConfirmCancelCreateUser() != DialogResult.Yes)
+            if (modeUtility.Mode == Mode.Create && ConfirmCancelCreateEntity() != DialogResult.Yes)
             {
                 e.Cancel = true;
             }
@@ -245,13 +291,16 @@ namespace Wholesale.Desktop.Forms
 
         private void SaveUser(object sender, EventArgs e)
         {
-            if (Mode.Create == modeUtility.Mode)
+            switch (modeUtility.Mode)
             {
-                AddEntity();
-            }
-            else
-            {
-                EditUser();
+                case Mode.Main:
+                    EditEntity();
+                    break;
+                case Mode.Create:
+                    AddEntity();
+                    break;
+                default:
+                    break;
             }
         }
 
@@ -272,7 +321,7 @@ namespace Wholesale.Desktop.Forms
 
             try
             {
-                upsert(entityJson);
+                entityID = upsert(entityJson);
             }
             catch (SqlException ex)
             {
@@ -295,7 +344,7 @@ namespace Wholesale.Desktop.Forms
             }
         }
 
-        private void EditUser()
+        private void EditEntity()
         {
             using (var repository = new MarketPlazaRepository())
             {
