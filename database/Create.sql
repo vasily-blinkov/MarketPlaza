@@ -320,10 +320,164 @@ BEGIN
 	PRINT N'Creating table ''Товары''.'
 	CREATE TABLE MarketPlaza.Товары (
 		ТоварID smallint IDENTITY(-32768, 1) PRIMARY KEY NOT NULL,
-		Название nvarchar(100) NOT NULL UNIQUE,
+		Название nvarchar(100) NOT NULL,
 		Цена numeric(11, 3) NOT NULL,
 		IsDeleted bit DEFAULT 0 NOT NULL
 	);
+END
+GO
+
+-- Procedure: Wholesale.MarketPlaza.GetSingleGood
+PRINT N'Creating or altering procedure ''GetSingleGood''';
+CREATE OR ALTER PROCEDURE MarketPlaza.GetSingleGood
+	@id smallint,
+	@token nvarchar(128)
+AS BEGIN
+	EXEC Auth.ValidateToken @token = @token;
+	SELECT TOP(1)
+		u.ТоварID, u.Название, u.Цена 
+		FROM MarketPlaza.Товары u
+		WHERE u.ТоварID = @id AND u.IsDeleted = 0;
+END
+GO
+
+-- Procedure: Wholesale.MarketPlaza.GetGoods
+PRINT N'Creating or altering procedure ''GetGoods''';
+CREATE OR ALTER PROCEDURE MarketPlaza.GetGoods
+	@query nvarchar(150) = NULL,
+	@token nvarchar(128)
+AS BEGIN
+	EXEC Auth.ValidateToken @token = @token;
+	SELECT u.ТоварID, u.Название
+		FROM MarketPlaza.Товары u
+		WHERE u.IsDeleted = 0 AND
+		(@query IS NULL OR LOWER(u.Название) LIKE N'%' + LOWER(@query) + '%');
+END
+GO
+
+-- Procedure: Wholesale.MarketPlaza.AddGood
+PRINT N'Creating or altering procedure ''AddGood''';
+CREATE OR ALTER PROCEDURE MarketPlaza.AddGood
+	@json nvarchar(max),
+	@id smallint OUTPUT, -- ID of the created entity
+	@token nvarchar(128)
+AS BEGIN
+	EXEC Auth.ValidateToken @token = @token;
+	-- Parse input JSON.
+	DECLARE @new_entity TABLE(Название nvarchar(100), Цена numeric(11, 3));
+	INSERT @new_entity (Название, Цена)
+		SELECT j.Название, j.Цена
+		FROM OpenJson(@json)
+		WITH (Название nvarchar(100), Цена numeric(11, 3)) AS j;
+	-- Validating inserting entity.
+	IF EXISTS (SELECT 1 FROM @new_entity u WHERE
+		ISNULL(u.Название, N'') = N'' OR ISNULL(u.Цена, -1) = -1)
+		THROW 57000, N'Не указано значение одного из обязательных для создания нового товара полей, таких как: название, цена', 1;
+	-- Inserting an entity.
+	DECLARE @inserted_entity TABLE(ID smallint);
+	BEGIN TRY
+		BEGIN TRANSACTION
+			INSERT MarketPlaza.Товары (Название, Цена)
+				OUTPUT INSERTED.ТоварID INTO @inserted_entity
+				SELECT j.Название, j.Цена
+				FROM @new_entity j;
+			SELECT @id = e.ID FROM @inserted_entity e; 
+		COMMIT;
+	END TRY
+	BEGIN CATCH
+		IF @@TRANCOUNT > 0
+		BEGIN
+			ROLLBACK;
+			THROW 57001, N'Произошло исключение при сохранении информации о товаре', 1;
+		END
+	END CATCH
+END
+GO
+
+-- Procedure: Wholesale.MarketPlaza.EditGood
+PRINT N'Creating or altering procedure ''EditGood''';
+CREATE OR ALTER PROCEDURE MarketPlaza.EditGood
+	@json nvarchar(max),
+	@id smallint OUTPUT,
+	@token nvarchar(128)
+AS BEGIN
+	EXEC Auth.ValidateToken @token = @token;
+	-- Parsing input JSON.
+	DECLARE @changes TABLE(ТоварID smallint, Название nvarchar(100), Цена numeric(11, 3));
+	INSERT @changes(ТоварID, Название, Цена)
+		SELECT j.ТоварID, j.Название, j.Цена FROM OpenJson(@json)
+		WITH (ТоварID smallint, Название nvarchar(100), Цена numeric(11, 3)) AS j;
+	-- ID of the entity to edit.
+	SELECT @id = u.ТоварID FROM @changes u;
+	-- Validate input data.
+	IF NOT EXISTS (SELECT 1 FROM MarketPlaza.Товары u WHERE u.ТоварID = @id)
+	BEGIN
+		DECLARE @error nvarchar(100) = N'Редактирование не выполнено, так как товар с ID = "'
+			+ IIF(@id IS NULL, N'(не указан)', CONVERT(nvarchar(6), @id))
+			+ N'" не существует';
+		THROW 58000, @error, 1;
+	END
+	BEGIN TRY
+		BEGIN TRANSACTION
+			-- Updating the entity.
+			UPDATE MarketPlaza.Товары SET
+				Название = IIF(TRIM(ISNULL(json.Название, N'')) = N'', MarketPlaza.Товары.Название , json.Название),
+				Цена = IIF(ISNULL(json.Цена, -1) = -1, MarketPlaza.Товары.Цена, json.Цена)
+			FROM @changes AS json WHERE MarketPlaza.Товары.ТоварID = @id;
+		COMMIT
+	END TRY
+	BEGIN CATCH
+		IF @@TRANCOUNT > 0
+		BEGIN
+			ROLLBACK;
+			THROW 58001, N'Редактирование товара не выполнено', 1; -- todo: для админов возвращать так же текст ошибки (все ROLLBACK)
+		END
+	END CATCH
+END
+GO
+
+-- Procedure: Wholesale.MarketPlaza.DeleteGood
+PRINT N'Creating or altering procedure ''DeleteGood''';
+CREATE OR ALTER PROCEDURE MarketPlaza.DeleteGood
+	@id smallint,
+	@token nvarchar(128)
+AS BEGIN
+	EXEC Auth.ValidateToken @token = @token;
+	IF NOT EXISTS (SELECT 1 FROM MarketPlaza.Товары а WHERE а.ТоварID = @id)
+	BEGIN
+		DECLARE @error nvarchar(100) = N'Удаление не выполнено, так как товар с ID = "'
+			+ IIF(@id IS NULL, N'(не указан)', CONVERT(nvarchar(6), @id))
+			+ N'" не существует';
+		THROW 59000, @error, 1;
+	END
+	BEGIN TRY
+		BEGIN TRANSACTION
+			UPDATE MarketPlaza.Товары SET IsDeleted = 1 WHERE ТоварID = @id;
+		COMMIT
+	END TRY
+	BEGIN CATCH
+		IF @@TRANCOUNT > 0
+		BEGIN
+			ROLLBACK;
+			THROW 58001, N'Удаление товара не выполнено', 1; 
+		END
+	END CATCH
+END
+GO
+
+-- Заполнение товаров.
+IF NOT EXISTS(SELECT * FROM MarketPlaza.Товары u WHERE u.ТоварID = -32768)
+BEGIN
+	PRINT 'Fill table ''Товары''.';
+	INSERT INTO MarketPlaza.Товары(Название, Цена) VALUES
+		(N'Очки', 262),
+		(N'Чехол', 746),
+		(N'KVM-переключатель', 3555),
+		(N'Зуб', 14708),
+		(N'Телеконвертер', 17417),
+		(N'Велошлем', 11999),
+		(N'ИБП', 9899),
+		(N'Куртка', 5041);
 END
 GO
 

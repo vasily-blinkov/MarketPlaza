@@ -80,9 +80,10 @@
       <DependentUpon>ExceptionControl.cs</DependentUpon>
     </Compile>
     <Compile Include="Converters\ConvertData.cs" />
-    <Compile Include="Converters\ConvertLessee.cs" />
-    <Compile Include="Converters\ConvertRole.cs" />
-    <Compile Include="Converters\ConvertUser.cs" />
+    <Compile Include="Converters\MarketPlaza\ConvertGood.cs" />
+    <Compile Include="Converters\MarketPlaza\ConvertLessee.cs" />
+    <Compile Include="Converters\Auth\ConvertRole.cs" />
+    <Compile Include="Converters\Auth\ConvertUser.cs" />
     <Compile Include="EqualityComparers\IdEqualityComparer.cs" />
     <Compile Include="Forms\ExceptionForm.cs">
       <SubType>Form</SubType>
@@ -96,6 +97,12 @@
     </Compile>
     <Compile Include="Forms\ParentForm.Designer.cs">
       <DependentUpon>ParentForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\GoodsForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\GoodsForm.Designer.cs">
+      <DependentUpon>GoodsForm.cs</DependentUpon>
     </Compile>
     <Compile Include="Forms\АрендаторForm.cs">
       <SubType>Form</SubType>
@@ -115,11 +122,16 @@
     <Compile Include="Models\Administration\User\UserForGrid.cs" />
     <Compile Include="Models\Administration\User\UserForUpsert.cs" />
     <Compile Include="Models\Auth\AuthResult.cs" />
+    <Compile Include="Models\MarketPlaza\Goods\Good.cs" />
+    <Compile Include="Models\MarketPlaza\Goods\GoodForDetail.cs" />
+    <Compile Include="Models\MarketPlaza\Goods\GoodForGrid.cs" />
+    <Compile Include="Models\MarketPlaza\Goods\GoodForUpsert.cs" />
     <Compile Include="Models\MarketPlaza\Lessees\Lessee.cs" />
     <Compile Include="Models\MarketPlaza\Lessees\LesseeForDetail.cs" />
     <Compile Include="Models\MarketPlaza\Lessees\LesseeForGrid.cs" />
     <Compile Include="Models\MarketPlaza\Lessees\LesseeForUpsert.cs" />
-    <Compile Include="Repositories\MarketPlazaRepository.cs" />
+    <Compile Include="Repositories\MarketPlaza\GoodRepository.cs" />
+    <Compile Include="Repositories\MarketPlaza\LesseeRepository.cs" />
     <Compile Include="Repositories\AdministrationRepository.cs" />
     <Compile Include="Repositories\AuthRepository.cs" />
     <Compile Include="Forms\AuthenticationForm.cs">
@@ -135,9 +147,15 @@
     <Compile Include="Utils\AuthenticationUtility.cs" />
     <Compile Include="Utils\CheckedListBoxUtility.cs" />
     <Compile Include="Utils\ExceptionsUtility.cs" />
+    <Compile Include="Utils\Forms\Abstractions\IEntityForm.cs" />
+    <Compile Include="Utils\Forms\Abstractions\IFilterRepository.cs" />
     <Compile Include="Utils\Forms\Configurations\EntityCreationConfiguration.cs" />
     <Compile Include="Utils\Forms\Configurations\FillDetails.cs" />
+    <Compile Include="Utils\Forms\Configurations\MasterFillingConfiguration.cs" />
     <Compile Include="Utils\Forms\EntityCreationUtility.cs" />
+    <Compile Include="Utils\Forms\Events\MasterGridFilledEventAgrs.cs" />
+    <Compile Include="Utils\Forms\Events\MasterGridFilledEventHandler.cs" />
+    <Compile Include="Utils\Forms\MasterFillingUtility.cs" />
     <Compile Include="Utils\GridUtility.cs" />
     <Compile Include="Utils\HashUtility.cs" />
     <Compile Include="Utils\JsonUtility.cs" />
@@ -155,6 +173,10 @@
     </EmbeddedResource>
     <EmbeddedResource Include="Forms\ParentForm.resx">
       <DependentUpon>ParentForm.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Forms\GoodsForm.resx">
+      <DependentUpon>GoodsForm.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
     <EmbeddedResource Include="Forms\АрендаторForm.resx">

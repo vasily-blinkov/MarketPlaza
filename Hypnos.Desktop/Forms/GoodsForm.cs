@@ -3,28 +3,34 @@ using System.ComponentModel;
 using System.Data.SqlClient;
 using System.Windows.Forms;
 using Wholesale.Desktop.EqualityComparers;
+using Wholesale.Desktop.Models.MarketPlaza.Goods;
 using Wholesale.Desktop.Models.MarketPlaza.Lessees;
 using Wholesale.Desktop.Repositories;
 using Wholesale.Desktop.Repositories.MarketPlaza;
 using Wholesale.Desktop.Utils;
 using Wholesale.Desktop.Utils.Forms;
+using Wholesale.Desktop.Utils.Forms.Abstractions;
 using Wholesale.Desktop.Utils.Forms.Configurations;
+using Wholesale.Desktop.Utils.Forms.Events;
 
 namespace Wholesale.Desktop.Forms
 {
-    public partial class АрендаторForm : Form
+    public partial class GoodsForm : Form, IEntityForm
     {
         private readonly ToolStripModeUtility<Mode> modeUtility;
 
-        private readonly EntityCreationUtility<LesseeForGrid, LesseeForDetail> entityCreator;
+        private readonly EntityCreationUtility<GoodForGrid, GoodForDetail> entityCreator;
+        private readonly MasterFillingUtility<GoodRepository, GoodForGrid> masterFiller;
 
         private short? entityID;
+        public short? EntityID => entityID;
 
-        public АрендаторForm()
+        public GoodsForm()
         {
             InitializeComponent();
             modeUtility = InitializeModes();
             entityCreator = InitializeCreator();
+            masterFiller = InitializeMasterFiller();
         }
 
         private ToolStripModeUtility<Mode> InitializeModes()
@@ -33,14 +39,28 @@ namespace Wholesale.Desktop.Forms
                 .Map(Mode.Main, filterLabel, filterBox, readButton, masterDetailsSeparator, crudLabel, createButton);
         }
 
-        private EntityCreationUtility<LesseeForGrid, LesseeForDetail> InitializeCreator() =>
-            new EntityCreationUtility<LesseeForGrid, LesseeForDetail>(
-                new EntityCreationConfiguration<LesseeForGrid, LesseeForDetail>
+        private EntityCreationUtility<GoodForGrid, GoodForDetail> InitializeCreator() =>
+            new EntityCreationUtility<GoodForGrid, GoodForDetail>(
+                new EntityCreationConfiguration<GoodForGrid, GoodForDetail>
                 {
                     MasterGrid = masterGrid,
                     FillDetails = FillDetail,
                     ModeUtility = modeUtility
                 });
+
+        private MasterFillingUtility<GoodRepository, GoodForGrid> InitializeMasterFiller()
+        {
+            var configuration = new MasterFillingConfiguration<GoodRepository, GoodForGrid>
+            {
+                EntityForm = this,
+                FilterBox = filterBox,
+                MasterGrid = masterGrid
+            };
+
+            configuration.Filled += MasterGridFilled;
+
+            return new MasterFillingUtility<GoodRepository, GoodForGrid>(configuration);
+        }
 
         private void Transpose(object sender, EventArgs e)
         {
@@ -51,31 +71,25 @@ namespace Wholesale.Desktop.Forms
 
         private void Prepare(object sender, EventArgs e)
         {
-            LoadRoles();
-            FillGrid();
-            LoadUser();
+            masterFiller.FillGrid();
+            LoadEntity();
         }
 
-        private void FillGrid()
+        /// <summary>
+        /// Заливка гриды меняет выделение, так как данные удаляются; выбираем созданный/отредактированный экземпляр.
+        /// </summary>
+        /// <remarks>
+        /// TODO: Зарефакторить.
+        /// </remarks>
+        private void MasterGridFilled(object sender, MasterGridFilledEventAgrs e)
         {
-            var entityID = this.entityID;
-
-            using (var repository = new LesseeRepository())
+            if (e.EntityID.HasValue)
             {
-                masterGrid.DataSource = repository.GetLessees(filterBox.Text);
-            }
-
-            GridUtility.Setup(masterGrid, ReflectionUtility.GetHiddenNames<LesseeForGrid>());
-
-            // Заливка гриды меняет выделение, так как данные удаляются; выбираем созданный/отредактированный экземпляр.
-            // TODO: Зарефакторить.
-            if (entityID.HasValue)
-            {
-                ChangeEntity(entityID.Value);
+                ChangeEntity(e.EntityID.Value);
             }
         }
 
-        private void LoadUser()
+        private void LoadEntity()
         {
             var selectedRows = masterGrid.SelectedRows;
 
@@ -87,7 +101,7 @@ namespace Wholesale.Desktop.Forms
             LoadEntity(selectedRows[0].Index);
         }
 
-        private void LoadUser(object sender, DataGridViewCellEventArgs e)
+        private void LoadEntity(object sender, DataGridViewCellEventArgs e)
         {
             if (modeUtility.Mode == Mode.Create)
             {
@@ -124,11 +138,11 @@ namespace Wholesale.Desktop.Forms
         /// </summary>
         private void LoadEntity(short entityID)
         {
-            LesseeForDetail entity;
+            GoodForDetail entity;
 
-            using (var repository = new LesseeRepository())
+            using (var repository = new GoodRepository())
             {
-                entity = repository.GetSingleLessee(entityID);
+                entity = repository.GetSingleGood(entityID);
             }
 
             FillDetail(entity);
@@ -145,20 +159,17 @@ namespace Wholesale.Desktop.Forms
                 return null; // nothing selected
             }
 
-            var idValue = masterGrid.Rows[rowIndex].Cells[nameof(LesseeForGrid.АрендаторID)].Value;
+            var idValue = masterGrid.Rows[rowIndex].Cells[nameof(GoodForGrid.ТоварID)].Value;
 
             return short.TryParse(idValue != null ? idValue.ToString() : string.Empty, out var userID)
                 ? userID
                 : (short?)null;
         }
 
-        private void FillDetail(LesseeForDetail entity)
+        private void FillDetail(GoodForDetail entity)
         {
-            фамилия.Text = entity.Фамилия;
-            имя.Text = entity.Имя;
-            отчество.Text = entity.Отчество;
-            телефон.Text = entity.Телефон;
-            адрес.Text = entity.Адрес;
+            titleBox.Text = entity.Название;
+            priceBox.Text = entity.Цена.ToString("F2");
         }
 
         private void FillRoles(short userID)
@@ -169,7 +180,7 @@ namespace Wholesale.Desktop.Forms
 
         private void Reload()
         {
-            FillGrid();
+            masterFiller.FillGrid();
 
             // Trying to select a row in the grid matching the currently displaying user in the detail panel.
             if (entityID.HasValue)
@@ -177,8 +188,7 @@ namespace Wholesale.Desktop.Forms
                 SelectRow(entityID.Value);
             }
 
-            LoadRoles();
-            LoadUser();
+            LoadEntity();
 
             if (entityID.HasValue)
             {
@@ -188,7 +198,7 @@ namespace Wholesale.Desktop.Forms
 
         private void SelectRow(short userID)
         {
-            var row = masterGrid.Rows.Find(nameof(LesseeForGrid.АрендаторID), userID, new IdEqualityComparer());
+            var row = masterGrid.Rows.Find(nameof(GoodForGrid.ТоварID), userID, new IdEqualityComparer());
 
             if (row == null)
             {
@@ -196,10 +206,6 @@ namespace Wholesale.Desktop.Forms
             }
 
             row.Selected = true;
-        }
-
-        private void LoadRoles()
-        {
         }
 
         private void CreateEntity(object sender, EventArgs e) => entityCreator.PrepareNewEntity();
@@ -211,9 +217,9 @@ namespace Wholesale.Desktop.Forms
                 return;
             }
 
-            using (var repository = new LesseeRepository())
+            using (var repository = new GoodRepository())
             {
-                repository.DeleteLessee(entityID.Value);
+                repository.DeleteGood(entityID.Value);
             }
 
             entityID = null;
@@ -224,7 +230,7 @@ namespace Wholesale.Desktop.Forms
         {
             // Cancelling entity creation itself.
             modeUtility.Mode = Mode.Main;
-            ((BindingList<LesseeForGrid>)masterGrid.DataSource).RemoveAt(masterGrid.RowCount - 1);
+            ((BindingList<GoodForGrid>)masterGrid.DataSource).RemoveAt(masterGrid.RowCount - 1);
         }
 
         private void DeleteUnsavedEntity()
@@ -272,13 +278,13 @@ namespace Wholesale.Desktop.Forms
 
         private DialogResult ConfirmCancelCreateEntity() => MessageBox.Show(
             "Форма содержит данные, которые пока не были сохранены в базу. При продолжении без сохранения они будут безвозвратно утеряны.",
-            "Отменить создание арендатора?",
+            "Отменить создание товара?",
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Question);
 
         private DialogResult ConfirmDeleteEntity() => MessageBox.Show(
-            "Вы удаляете арендатора. Отменить действие будет невозможно. Уверены, что хотите продолжить?",
-            "Удалить арендатора?",
+            "Вы удаляете товар. Отменить действие будет невозможно. Уверены, что хотите продолжить?",
+            "Удалить товар?",
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Question);
 
@@ -307,9 +313,9 @@ namespace Wholesale.Desktop.Forms
 
         private void AddEntity()
         {
-            using (var repository = new LesseeRepository())
+            using (var repository = new GoodRepository())
             {
-                UpsertUser(repository.AddLessee);
+                UpsertUser(repository.AddGood);
             }
         }
 
@@ -341,26 +347,23 @@ namespace Wholesale.Desktop.Forms
             }
             else
             {
-                MessageBox.Show(message, "Арендатор не сохранен", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(message, "Товар не сохранен", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         private void EditEntity()
         {
-            using (var repository = new LesseeRepository())
+            using (var repository = new GoodRepository())
             {
-                UpsertUser(repository.EditLessee);
+                UpsertUser(repository.EditGood);
             }
         }
 
-        private LesseeForUpsert ReadDetail() => new LesseeForUpsert
+        private GoodForUpsert ReadDetail() => new GoodForUpsert
         {
-            АрендаторID = entityID.Value,
-            Фамилия = фамилия.Text,
-            Имя = имя.Text,
-            Отчество = отчество.Text,
-            Телефон = телефон.Text,
-            Адрес = адрес.Text,
+            ТоварID = entityID,
+            Название = titleBox.Text,
+            Цена = float.Parse(priceBox.Text),
         };
     }
 }

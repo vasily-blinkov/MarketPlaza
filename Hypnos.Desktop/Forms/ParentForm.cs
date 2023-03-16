@@ -48,6 +48,8 @@ namespace Wholesale.Desktop.Forms
 
         private void OpenLessees(object sender, EventArgs e) => OpenChild<АрендаторForm>();
 
+        private void OpenGoods(object sender, EventArgs e) => OpenChild<GoodsForm>();
+
         private void OpenChild<T>()
             where T : Form, new()
         {

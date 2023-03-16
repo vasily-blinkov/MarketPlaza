@@ -1,7 +1,7 @@
 ﻿using System.Data.SqlClient;
 using Wholesale.Desktop.Models.Administration.User;
 
-namespace Wholesale.Desktop.Converters
+namespace Wholesale.Desktop.Converters.Auth
 {
     public static class ConvertUser
     {

@@ -3,45 +3,46 @@ using System.ComponentModel;
 using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
-using Wholesale.Desktop.Converters;
-using Wholesale.Desktop.Models.MarketPlaza.Lessees;
+using Wholesale.Desktop.Converters.MarketPlaza;
+using Wholesale.Desktop.Models.MarketPlaza.Goods;
+using Wholesale.Desktop.Utils.Forms.Abstractions;
 
-namespace Wholesale.Desktop.Repositories
+namespace Wholesale.Desktop.Repositories.MarketPlaza
 {
-    public class MarketPlazaRepository : RepositoryBase
+    public class GoodRepository : RepositoryBase, IFilterRepository<GoodForGrid>
     {
         protected override string SchemaName => "MarketPlaza";
 
-        public BindingList<LesseeForGrid> GetLessees(string query = null)
+        public BindingList<GoodForGrid> Filter(string query = null)
         {
             SqlParameter[] parameters = !string.IsNullOrWhiteSpace(query)
                 ? new[] { new SqlParameter { ParameterName = "@query", Value = query } }
                 : new SqlParameter[0];
 
-            return ExecuteReaderAuth("GetLessees", ConvertLessee.ForGrid, parameters);
+            return ExecuteReaderAuth<GoodForGrid>("GetGoods", ConvertGood.ForGrid<GoodForGrid>, parameters);
         }
 
-        public LesseeForDetail GetSingleLessee(short id) => ExecuteReaderAuth(
-            "GetSignleLessee", ConvertLessee.ForDetail,
+        public GoodForDetail GetSingleGood(short id) => ExecuteReaderAuth<GoodForDetail>(
+            "GetSingleGood", ConvertGood.ForDetail,
             new SqlParameter { ParameterName = "@id", Value = id }
         ).Single();
 
         /// <returns>ID of the created entity.</returns>
-        public short? AddLessee(string json)
+        public short? AddGood(string json)
         {
             var id = new SqlParameter { ParameterName = "@id", Direction = ParameterDirection.Output, SqlDbType = SqlDbType.SmallInt };
-            ExecuteCommandAuth("AddLessee", new SqlParameter("@json", json), id);
+            ExecuteCommandAuth("AddGood", new SqlParameter("@json", json), id);
             return (short?)(id.Value != DBNull.Value ? id.Value : null);
         }
 
-        public short? EditLessee(string json)
+        public short? EditGood(string json)
         {
             var id = new SqlParameter { ParameterName = "@id", Direction = ParameterDirection.Output, SqlDbType = SqlDbType.SmallInt };
-            ExecuteCommandAuth("EditLessee", new SqlParameter("@json", json), id);
+            ExecuteCommandAuth("EditGood", new SqlParameter("@json", json), id);
             return (short?)(id.Value != DBNull.Value ? id.Value : null);
         }
 
-        public int DeleteLessee(short id) => ExecuteCommandAuth("DeleteLessee", new SqlParameter("@id", id)
+        public int DeleteGood(short id) => ExecuteCommandAuth("DeleteGood", new SqlParameter("@id", id)
         );
     }
 }

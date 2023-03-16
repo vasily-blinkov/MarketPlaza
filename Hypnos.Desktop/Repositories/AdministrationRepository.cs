@@ -2,6 +2,7 @@
 using System.Data.SqlClient;
 using System.Linq;
 using Wholesale.Desktop.Converters;
+using Wholesale.Desktop.Converters.Auth;
 using Wholesale.Desktop.Models.Administration;
 using Wholesale.Desktop.Models.Administration.User;
 

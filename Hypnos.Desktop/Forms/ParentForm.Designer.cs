@@ -33,6 +33,7 @@
             this.administrationItem = new System.Windows.Forms.ToolStripMenuItem();
             this.leasesItem = new System.Windows.Forms.ToolStripMenuItem();
             this.lesseesItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.goodsItem = new System.Windows.Forms.ToolStripMenuItem();
             this.mainMenu.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -40,7 +41,8 @@
             // 
             this.mainMenu.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.administrationItem,
-            this.leasesItem});
+            this.leasesItem,
+            this.goodsItem});
             this.mainMenu.Location = new System.Drawing.Point(0, 0);
             this.mainMenu.Name = "mainMenu";
             this.mainMenu.Size = new System.Drawing.Size(800, 24);
@@ -65,9 +67,16 @@
             // lesseesItem
             // 
             this.lesseesItem.Name = "lesseesItem";
-            this.lesseesItem.Size = new System.Drawing.Size(180, 22);
+            this.lesseesItem.Size = new System.Drawing.Size(142, 22);
             this.lesseesItem.Text = "Ар&ендаторы";
             this.lesseesItem.Click += new System.EventHandler(this.OpenLessees);
+            // 
+            // goodsItem
+            // 
+            this.goodsItem.Name = "goodsItem";
+            this.goodsItem.Size = new System.Drawing.Size(60, 20);
+            this.goodsItem.Text = "&Товары";
+            this.goodsItem.Click += new System.EventHandler(this.OpenGoods);
             // 
             // ParentForm
             // 
@@ -97,5 +106,6 @@
         private System.Windows.Forms.ToolStripMenuItem administrationItem;
         private System.Windows.Forms.ToolStripMenuItem leasesItem;
         private System.Windows.Forms.ToolStripMenuItem lesseesItem;
+        private System.Windows.Forms.ToolStripMenuItem goodsItem;
     }
 }

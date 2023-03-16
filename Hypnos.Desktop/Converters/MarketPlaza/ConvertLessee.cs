@@ -1,7 +1,7 @@
 ﻿using System.Data.SqlClient;
 using Wholesale.Desktop.Models.MarketPlaza.Lessees;
 
-namespace Wholesale.Desktop.Converters
+namespace Wholesale.Desktop.Converters.MarketPlaza
 {
     public class ConvertLessee
     {
@@ -42,7 +42,7 @@ namespace Wholesale.Desktop.Converters
                 return new T();
             }
 
-            destination.АрендаторID = (short)source[nameof(LesseeForGrid.АрендаторID)];
+            destination.АрендаторID = (short)source[nameof(Lessee.АрендаторID)];
 
             return destination;
         }
