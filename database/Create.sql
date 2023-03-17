@@ -692,10 +692,41 @@ IF OBJECT_ID('MarketPlaza.ТоварАрендатор') IS NULL
 BEGIN
 	PRINT N'Creating table ''ТоварАрендатор''.'
 	CREATE TABLE MarketPlaza.ТоварАрендатор (
-		ТоварID smallint FOREIGN KEY REFERENCES MarketPlaza.Арендаторы(АрендаторID) NOT NULL,
-		АрендаторID smallint FOREIGN KEY REFERENCES MarketPlaza.Товары(ТоварID) NOT NULL,
+		ТоварID smallint FOREIGN KEY REFERENCES MarketPlaza.Товары(ТоварID) NOT NULL,
+		АрендаторID smallint FOREIGN KEY REFERENCES MarketPlaza.Арендаторы(АрендаторID) NOT NULL,
 		PRIMARY KEY (ТоварID, АрендаторID)
 	);
+END
+GO
+
+-- Заполнение товаров арендаторов.
+IF NOT EXISTS(SELECT TOP(1) 1 FROM MarketPlaza.ТоварАрендатор u)
+BEGIN
+	PRINT 'Fill table ''ТоварАрендатор''.';
+	INSERT INTO MarketPlaza.ТоварАрендатор(ТоварID, АрендаторID) VALUES
+		(-32768, -32768),
+		(-32763, -32768),
+		(-32765, -32767),
+		(-32761, -32767),
+		(-32767, -32766),
+		(-32766, -32766),
+		(-32764, -32766),
+		(-32762, -32766);
+END
+GO
+
+-- Procedure: Wholesale.MarketPlaza.GetLesseeGoods
+-- Returns data for managing goods selling by a lessee.
+PRINT N'Creating or altering procedure ''GetLesseeGoods''';
+CREATE OR ALTER PROCEDURE MarketPlaza.GetLesseeGoods
+	@lessee_id smallint,
+	@token nvarchar(128)
+AS BEGIN
+	EXEC Auth.ValidateToken @token = @token;
+	SET NOCOUNT ON;
+	SELECT та.ТоварID, т.Название, т.Цена
+		FROM MarketPlaza.ТоварАрендатор та LEFT JOIN MarketPlaza.Товары т ON т.ТоварID = та.ТоварID
+		WHERE та.АрендаторID = @lessee_id;
 END
 GO
 
